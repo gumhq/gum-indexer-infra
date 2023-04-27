@@ -1,0 +1,3 @@
+name: gum-indexer
+description: A minimal Google Cloud TypeScript Pulumi program
+runtime: nodejs
