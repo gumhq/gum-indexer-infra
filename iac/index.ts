@@ -2,6 +2,8 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as docker from "@pulumi/docker";
 
+const APP_NAME = "gum-indexer";
+
 // Get the GCP project and region from the configuration.
 const config = new pulumi.Config("gcp");
 const project = config.require("project") || gcp.config.project;
@@ -52,7 +54,6 @@ const allowSSH = new gcp.compute.Firewall("allowssh", {
   sourceRanges: ["0.0.0.0/0"],
 });
 
-
 // Build and push the Docker image to Google Container Registry.
 const imageName = "gum-redis-server";
 const redisImage = new docker.Image(imageName, {
@@ -64,6 +65,7 @@ const redisImage = new docker.Image(imageName, {
     },
     platform: "linux/amd64",
   },
+  skipPush: false,
   registry: {
     server: "us.gcr.io",
     username: "_json_key",
@@ -74,18 +76,23 @@ const redisImage = new docker.Image(imageName, {
 
 
 // Create a PostgreSQL instance.
-const postgres = new gcp.sql.DatabaseInstance("postgres", {
+const postgres = new gcp.sql.DatabaseInstance(`${APP_NAME}-devnet`, {
   project: project,
   region: region,
   settings: {
     tier: "db-f1-micro",
     ipConfiguration: {
       ipv4Enabled: true,
+      authorizedNetworks: [
+        {
+          value: "0.0.0.0/0",
+        },
+      ],
     },
     databaseFlags: [
       {
         name: "cloudsql.iam_authentication",
-        value: "on",
+        value: "off",
       },
     ],
     backupConfiguration: {
@@ -98,13 +105,20 @@ const postgres = new gcp.sql.DatabaseInstance("postgres", {
   databaseVersion: "POSTGRES_14",
 });
 
-const postgresDB = new gcp.sql.Database("postgres-db", {
+// Export the PostgreSQL instance's external IP.
+export const postgresExternalIp = postgres.publicIpAddress;
+
+// Export the PostgreSQL instance's port.
+export const postgresPort = 5432;
+
+// Create a PostgreSQL database and user.
+const postgresDB = new gcp.sql.Database(`${APP_NAME}-devnet-db`, {
   project: project,
   instance: postgres.name,
   name: POSTGRES_DB_NAME,
 });
 
-const postgresUser = new gcp.sql.User("postgres-user", {
+const postgresUser = new gcp.sql.User(`${APP_NAME}-devnet-user`, {
   project: project,
   instance: postgres.name,
   name: "gumuser",
@@ -129,7 +143,8 @@ const serviceAccountKey = new gcp.serviceaccount.Key("gum-redis-server-sa-key", 
 });
 
 // Create a Compute Engine instance with a custom startup script.
-const instance = new gcp.compute.Instance("instance", {
+const instance = new gcp.compute.Instance(`${APP_NAME}-devnet-instance`, {
+  name: `${APP_NAME}-devnet-instance`,
   project: project,
   zone: region + "-a",
   machineType: "n1-standard-1",
@@ -151,7 +166,7 @@ const instance = new gcp.compute.Instance("instance", {
     ],
   },
   allowStoppingForUpdate: true,
-  metadataStartupScript: pulumi.all([redisImage.imageName, postgres.connectionName, postgresUser.name, postgresUser.password]).apply(([image, connection, user, pass]) => `
+  metadataStartupScript: pulumi.all([redisImage.imageName, postgresExternalIp, postgresUser.name, postgresUser.password]).apply(([image, host, user, pass]) => `
     #!/bin/bash
     exec > >(tee /var/log/startup.log)
     exec 2>&1
@@ -165,15 +180,66 @@ const instance = new gcp.compute.Instance("instance", {
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io
 
-    echo '${gcpServiceAccountKey}' > /tmp/keyfile.json
-    gcloud auth activate-service-account --key-file=/tmp/keyfile.json
-    gcloud auth configure-docker us.gcr.io
-
     docker pull ${image}
-    docker run -d --name app -p 8080:8080 --restart always --log-driver gcplogs --log-opt gcp-log-cmd=true -e POSTGRES_CONNECTION_NAME=${connection} -e POSTGRES_USER=${user} -e POSTGRES_PASSWORD=${pass} -e POSTGRES_DB_NAME=${POSTGRES_DB_NAME} ${image}
+    docker run -d --name app -p 8080:8080 --restart always --log-driver gcplogs --log-opt gcp-log-cmd=true -e CLUSTER="devnet" -e POSTGRES_HOST=${host} -e POSTGRES_USER=${user} -e POSTGRES_PASSWORD=${pass} -e POSTGRES_DB_NAME=${POSTGRES_DB_NAME} ${image}
   `),
 });
 
+const hasuraImageName = "gum-hasura";
+const hasuraImage = new docker.Image(hasuraImageName, {
+  imageName: pulumi.interpolate`us.gcr.io/${project}/${hasuraImageName}:latest`,
+  build: {
+    context: "./hasura",
+  },
+  skipPush: false,
+  registry: {
+    server: "us.gcr.io",
+    username: "_json_key",
+    password: gcpServiceAccountKey,
+  },
+});
+
+const hasuraService = new gcp.cloudrun.Service(`${APP_NAME}-devnet-service`, {
+  location: region,
+  template: {
+    spec: {
+      containers: [
+        {
+          image: hasuraImage.imageName,
+          envs: [
+            {
+              name: "HASURA_GRAPHQL_DATABASE_URL",
+              value: pulumi.all([postgresUser.name, postgresUser.password, postgresExternalIp]).apply(([user, pass, ip]) => `postgres://${user}:${pass}@${ip}:${postgresPort}/${POSTGRES_DB_NAME}`),
+            },
+            {
+              name: "HASURA_GRAPHQL_ENABLE_CONSOLE",
+              value: "true",
+            },
+          ],
+        }
+      ],
+    },
+  },
+  autogenerateRevisionName: true,
+  traffics: [
+    {
+      percent: 100,
+      latestRevision: true,
+    },
+  ],
+});
+
+
+// Set the IAM policy for the Cloud Run service to be publicly accessible.
+const hasuraIamMember = new gcp.cloudrun.IamMember(`${APP_NAME}-devnet-hasura-iam-member`, {
+  location: region,
+  service: hasuraService.name,
+  role: "roles/run.invoker",
+  member: "allUsers",
+});
+
+// Export the Hasura service URL.
+export const hasuraServiceUrl = hasuraService.statuses[0].url;
 
 // Export the instance's external IP.
 export const instanceExternalIp = instance.networkInterfaces.apply(nis => nis[0].accessConfigs?.[0].natIp);
