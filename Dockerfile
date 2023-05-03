@@ -12,7 +12,7 @@ COPY package*.json ./
 RUN npm install
 
 # Bundle app source
-COPY . .
+COPY src/ ./src/
 
 # Expose the server port (8080)
 EXPOSE 8080
