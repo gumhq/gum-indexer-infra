@@ -7,7 +7,7 @@ export type Truthy<T> = T extends false | "" | 0 | null | undefined ? never : T;
 
 export const truthy = <T>(value: T): value is Truthy<T> => !!value;
 
-const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey; account: any }[] }, sequelize: any) => {
+const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey; account: any, slot_created_at: number, slot_updated_at: number }[] }, sequelize: any) => {
   for (const [modelName, instances] of Object.entries(data)) {
     // Ensure the correct model name is used
     const model = sequelize.model(modelName);
@@ -27,6 +27,8 @@ const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey
       await model.upsert({
         address: instance.publicKey.toBase58(),
         ...instance.account,
+        slot_created_at: instance.slot_created_at || 0,
+        slot_updated_at: instance.slot_updated_at || 0,
         refreshed_at: new Date(),
       });
     }
@@ -42,7 +44,7 @@ const createSchemaAndUpsertArchivalData = async (programId: PublicKey, rpcUrl: s
   const anchorProgram = await Program.at(programId, provider);
   const idl = anchorProgram.idl;
   const idlAccounts = idl.accounts;
-  let accountsByIDLAccountType: { [key: string]: { publicKey: PublicKey; account: any }[] } = {};
+  let accountsByIDLAccountType: { [key: string]: { publicKey: PublicKey; account: any, slot_created_at: number; slot_updated_at: number; }[] } = {};
 
   if (!idlAccounts) {
     throw new Error("IDL accounts not found");
@@ -80,9 +82,20 @@ const createSchemaAndUpsertArchivalData = async (programId: PublicKey, rpcUrl: s
       await Promise.all(
         response.map(async ({ pubkey, account }) => {
           try {
+            const signatures = await provider.connection.getConfirmedSignaturesForAddress2(pubkey, {
+              limit: 1000,
+            });
+            const firstSignature = signatures?.[0];
+            const lastSignature = signatures?.slice(-1)[0];
+            const firstTimestamp = firstSignature?.blockTime ? new Date(firstSignature.blockTime * 1000).toISOString() : null
+            const lastTimestamp = lastSignature?.blockTime ? new Date(lastSignature.blockTime * 1000).toISOString() : null
+            const firstSlot = firstSignature?.slot;
+            const lastSlot = lastSignature?.slot;
             return {
               publicKey: pubkey,
               account: anchorProgram.coder.accounts.decode(type, account.data),
+              slot_created_at: firstSlot,
+              slot_updated_at: lastSlot,
             };
           } catch (_e) {
             console.error(`Decode error ${pubkey.toBase58()}`, _e);

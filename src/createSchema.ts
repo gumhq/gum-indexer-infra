@@ -68,6 +68,16 @@ const defineModel = (
       refreshed_at: {
         type: DataTypes.DATE,
       },
+      slot_created_at: { 
+        type: DataTypes.BIGINT, 
+        allowNull: false,
+        defaultValue: 0,
+      },
+      slot_updated_at: { 
+        type: DataTypes.BIGINT,
+        allowNull: false,
+        defaultValue: 0,
+      },
     },
     {
       underscored: true,
@@ -113,8 +123,8 @@ export const defineIdlModels = async ({
     }
   }
 
-  // Create tables for all defined models
+  // Create tables for all defined models or update the existing ones
   for (const model of definedModels) {
-    await model.sync();
+    await model.sync({ alter: true });
   }
 };
