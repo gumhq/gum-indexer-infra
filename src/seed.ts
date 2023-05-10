@@ -2,21 +2,30 @@ import { AnchorProvider, Program, Wallet } from "@project-serum/anchor";
 import { Connection, GetProgramAccountsFilter, Keypair, PublicKey } from "@solana/web3.js";
 import { defineIdlModels } from "./createSchema";
 import database from "./database";
+const axios = require("axios");
 
 export type Truthy<T> = T extends false | "" | 0 | null | undefined ? never : T;
 
 export const truthy = <T>(value: T): value is Truthy<T> => !!value;
 
+const fetchJsonData = async (url: string): Promise<any> => {
+  try {
+    const response = await axios.get(url);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching JSON data from URL "${url}":`, error);
+    return null;
+  }
+};
+
 const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey; account: any, slot_created_at: number, slot_updated_at: number }[] }, sequelize: any) => {
   for (const [modelName, instances] of Object.entries(data)) {
-    // Ensure the correct model name is used
     const model = sequelize.model(modelName);
     if (!model) {
       console.error(`Model ${modelName} not found in the database.`);
       continue;
     }
     for (const instance of instances) {
-      // if instance value is PublicKey, convert to base58 string
       if (instance.account) {
         for (const [key, value] of Object.entries(instance.account)) {
           if (value instanceof PublicKey) {
@@ -24,9 +33,19 @@ const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey
           }
         }
       }
+
+      let metadata: any = null;
+      if (instance.account && instance.account.metadataUri) {
+        metadata = await fetchJsonData(instance.account.metadataUri);
+        if (!metadata) {
+          console.error(`Failed to fetch metadata for "${instance.account.metadataUri}".`);
+        }
+      }
+
       await model.upsert({
         address: instance.publicKey.toBase58(),
         ...instance.account,
+        metadata: metadata ? metadata : null,
         slot_created_at: instance.slot_created_at || 0,
         slot_updated_at: instance.slot_updated_at || 0,
         refreshed_at: new Date(),
@@ -34,7 +53,6 @@ const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey
     }
   }
 };
-
 
 const createSchemaAndUpsertArchivalData = async (programId: PublicKey, rpcUrl: string) => {
   const keypair = Keypair.generate();

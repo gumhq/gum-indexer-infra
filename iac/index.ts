@@ -294,6 +294,7 @@ const hasuraImage = new docker.Image(hasuraImageName, {
 });
 
 const hasuraServiceDevnet = new gcp.cloudrun.Service(`${APP_NAME}-devnet-service`, {
+  name: `${APP_NAME}-devnet`,
   location: region,
   template: {
     spec: {

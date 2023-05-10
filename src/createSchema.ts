@@ -57,28 +57,37 @@ const defineModel = (
   accountConfig: { type: string; table?: string; schema?: string },
   schema: { [key: string]: any }
 ) => {
+  const modelDefinition = {
+    address: {
+      type: DataTypes.STRING,
+      primaryKey: true,
+    },
+    ...schema[account.name],
+    refreshed_at: {
+      type: DataTypes.DATE,
+    },
+    slot_created_at: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    slot_updated_at: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      defaultValue: 0,
+    },
+  };
+
+  // Add metadata column to post and profile_metadata tables
+  if (account.name === 'Post' || account.name === 'ProfileMetadata') {
+    modelDefinition['metadata'] = {
+      type: DataTypes.JSONB,
+    };
+  }
+
   return sequelize.define(
     account.name,
-    {
-      address: {
-        type: DataTypes.STRING,
-        primaryKey: true,
-      },
-      ...schema[account.name],
-      refreshed_at: {
-        type: DataTypes.DATE,
-      },
-      slot_created_at: { 
-        type: DataTypes.BIGINT, 
-        allowNull: false,
-        defaultValue: 0,
-      },
-      slot_updated_at: { 
-        type: DataTypes.BIGINT,
-        allowNull: false,
-        defaultValue: 0,
-      },
-    },
+    modelDefinition,
     {
       underscored: true,
       updatedAt: false,
