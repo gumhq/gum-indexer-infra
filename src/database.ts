@@ -1,5 +1,8 @@
 import { Sequelize } from "sequelize";
 import * as pg from "pg";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const host = process.env.POSTGRES_HOST;
 const port = Number(process.env.PGPORT) || 5432;

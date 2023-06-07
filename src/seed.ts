@@ -3,12 +3,15 @@ import { Connection, GetProgramAccountsFilter, Keypair, PublicKey } from "@solan
 import { defineIdlModels } from "./createSchema";
 import database from "./database";
 const axios = require("axios");
+import dotenv from "dotenv";
+
+dotenv.config();
 
 export type Truthy<T> = T extends false | "" | 0 | null | undefined ? never : T;
 
 export const truthy = <T>(value: T): value is Truthy<T> => !!value;
 
-const fetchJsonData = async (url: string): Promise<any> => {
+export const fetchJsonData = async (url: string): Promise<any> => {
   try {
     const response = await axios.get(url);
     return response.data;

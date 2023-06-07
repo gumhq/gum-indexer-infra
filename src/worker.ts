@@ -2,6 +2,7 @@ import Redis from "ioredis";
 import { Program,  AnchorProvider, Wallet, BorshCoder } from '@project-serum/anchor';
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import database from "./database";
+import { fetchJsonData } from "./seed";
 
 const REDIS_HOST = "0.0.0.0";
 const REDIS_PORT = 6379;
@@ -103,14 +104,18 @@ async function createQuery(decodedData: any, decodedAccountData: any) {
     const profileAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
     const randomHash = decodedData.data.randomHash;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
 
-    const query = `INSERT INTO public.post (address, profile, metadata_uri, random_hash, refreshed_at, created_at) VALUES ('${postAddress}', '${profileAddress}', '${metadataUri}', '{${randomHash.join(",")}}', '${isoTimestamp}', '${isoTimestamp}');`;
+    const query = `INSERT INTO public.post (address, profile, metadata_uri, metadata, random_hash, refreshed_at, created_at) VALUES ('${postAddress}', '${profileAddress}', '${metadataUri}', '${metadataJson}', '{${randomHash.join(",")}}', '${isoTimestamp}', '${isoTimestamp}');`;
     return query;
   } else if (decodedData.name === "updataPost") {
     const postAddress = decodedAccountData.accounts.find((account: any) => account.name === "Post").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
 
-    const query = `UPDATE public.post SET metadata_uri = '${metadataUri}' WHERE address = '${postAddress}';`;
+    const query = `UPDATE public.post SET metadata_uri = '${metadataUri}', metadata = '${metadataJson}' WHERE address = '${postAddress}';`;
     return query;
   } else if (decodedData.name === "deletePost") {
     const postAddress = decodedAccountData.accounts.find((account: any) => account.name === "Post").pubkey.toBase58();
@@ -143,14 +148,18 @@ async function createQuery(decodedData: any, decodedAccountData: any) {
     const profileMetadataAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile Metadata").pubkey.toBase58();
     const profileAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
 
-    const query = `INSERT INTO public.profile_metadata (address, profile, metadata_uri, refreshed_at, created_at) VALUES ('${profileMetadataAddress}', '${profileAddress}', '${metadataUri}', '${isoTimestamp}', '${isoTimestamp}');`;
+    const query = `INSERT INTO public.profile_metadata (address, profile, metadata_uri,metadata, refreshed_at, created_at) VALUES ('${profileMetadataAddress}', '${profileAddress}', '${metadataUri}', '${metadataJson}', '${isoTimestamp}', '${isoTimestamp}');`;
     return query;
   } else if (decodedData.name === "updateProfileMetadata") {
     const profileMetadataAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile Metadata").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
 
-    const query = `UPDATE public.profile_metadata SET metadata_uri = '${metadataUri}' WHERE address = '${profileMetadataAddress}';`;
+    const query = `UPDATE public.profile_metadata SET metadata_uri = '${metadataUri}', metadata = '${metadataJson}' WHERE address = '${profileMetadataAddress}';`;
     return query;
   } else if (decodedData.name === "deleteProfileMetadata") {
     const profileMetadataAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile Metadata").pubkey.toBase58();
