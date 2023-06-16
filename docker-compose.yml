@@ -6,6 +6,7 @@ services:
     container_name: indexer-infra-app
     ports:
       - "8080:8080"
+      - "8081:8081"
     environment:
       - CLUSTER=mainnet-beta
       - POSTGRES_HOST=db

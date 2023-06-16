@@ -5,8 +5,11 @@
   "main": "index.js",
   "scripts": {
     "start": "ts-node src/server.ts",
+    "start:smartprofile": "ts-node src/smartProfileServer.ts",
     "worker": "ts-node src/worker.ts",
-    "seed": "ts-node src/seed.ts"
+    "worker:smartprofile": "ts-node src/smartProfileWorker.ts",
+    "seed": "ts-node src/seed.ts",
+    "seed:smartprofile": "ts-node src/smartProfileSeed.ts"
   },
   "keywords": [],
   "author": "",

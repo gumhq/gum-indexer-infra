@@ -16,6 +16,7 @@ COPY src/ ./src/
 
 # Expose the server port (8080)
 EXPOSE 8080
+EXPOSE 8081
 EXPOSE 6379
 
 # Install supervisord
