@@ -19,6 +19,11 @@ app.post("/", async (req, res) => {
   res.status(200).send("OK");
 });
 
+// route for health check
+app.get("/health", async (req, res) => {
+  res.status(200).send("OK");
+});
+
 app.listen(8080, () => {
   console.log("Server is listening on port 8080");
 });

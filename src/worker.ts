@@ -1,22 +1,27 @@
 import Redis from "ioredis";
 import { Program,  AnchorProvider, Wallet, BorshCoder } from '@project-serum/anchor';
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
-import database from "./database";
 import { fetchJsonData } from "./seed";
+import connectToDatabase from "./database";
 
 const REDIS_HOST = "0.0.0.0";
 const REDIS_PORT = 6379;
 const STREAM_NAME = "gum_events";
-const MAINNET_RPC_URL = "https://api.mainnet-beta.solana.com";
-const DEVNET_RPC_URL = "https://api.devnet.solana.com";
+const MAINNET_RPC_URL = process.env.MAINNET_RPC_URL || "https://api.mainnet-beta.solana.com";
+const DEVNET_RPC_URL = process.env.DEVNET_RPC_URL || "https://api.devnet.solana.com";
 
 const redis = new Redis(REDIS_PORT, REDIS_HOST);
 const rpcUrl = process.env.CLUSTER === "mainnet-beta" ? MAINNET_RPC_URL : DEVNET_RPC_URL;
 
 async function main() {
   let last_id = "$";
+  
+  if (!rpcUrl) {
+    throw new Error("RPC URL not found");
+  }
 
-  let sequelize = database;
+  const databaseName = process.env.DATABASE_NAME || "gum";
+  let sequelize = await connectToDatabase(databaseName);
   const keypair = Keypair.generate();
   const wallet  = new Wallet(keypair);
   const connection = new Connection(rpcUrl, "confirmed");

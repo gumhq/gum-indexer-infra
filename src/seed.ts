@@ -4,6 +4,7 @@ import { defineIdlModels } from "./createSchema";
 import database from "./database";
 const axios = require("axios");
 import dotenv from "dotenv";
+import connectToDatabase from "./database";
 
 dotenv.config();
 
@@ -74,8 +75,9 @@ const createSchemaAndUpsertArchivalData = async (programId: PublicKey, rpcUrl: s
   const accounts = Object.keys(idlAccounts).map((key: any) => ({
     type: idlAccounts[key].name,
   }));
-
-  let sequelize = database;
+  
+  const databaseName = process.env.DATABASE_NAME || "gum";
+  let sequelize = await connectToDatabase(databaseName);
 
   // Define the models from the idl accounts and store them in the database
   await defineIdlModels({ idl, accounts, sequelize });
@@ -131,8 +133,11 @@ const createSchemaAndUpsertArchivalData = async (programId: PublicKey, rpcUrl: s
 };
 
 const GUM_PROGRAM_ID = new PublicKey("CDDMdCAWB5AXgvEy7XJRggAu37QPG1b9aJXndZoPUkkm");
-const MAINNET_RPC_URL = "https://api.mainnet-beta.solana.com";
-const DEVNET_RPC_URL = "https://api.devnet.solana.com";
+const MAINNET_RPC_URL = process.env.MAINNET_RPC_URL || "https://api.mainnet-beta.solana.com";
+const DEVNET_RPC_URL = process.env.DEVNET_RPC_URL || "https://api.devnet.solana.com";
 const rpcUrl = process.env.CLUSTER === "mainnet-beta" ? MAINNET_RPC_URL : DEVNET_RPC_URL;
 
+if (!rpcUrl) {
+  throw new Error("RPC URL not found");
+}
 createSchemaAndUpsertArchivalData(GUM_PROGRAM_ID, rpcUrl);
