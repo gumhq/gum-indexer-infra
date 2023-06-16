@@ -11,6 +11,8 @@ const project = config.require("project") || gcp.config.project;
 const region = config.require("region") || "us-central1";
 
 const gumIndexerConfig = new pulumi.Config("gum-indexer");
+const mainnetRpcUrl = gumIndexerConfig.require("mainnetRpcUrl");
+const devnetRpcUrl = gumIndexerConfig.require("devnetRpcUrl");
 const dbPassword = gumIndexerConfig.requireSecret("dbPassword"); // This is Postgres Devnet DB Password
 const postgresMainnetPassword = gumIndexerConfig.requireSecret("postgresMainnetPassword");
 const gcpServiceAccountKey = gumIndexerConfig.requireSecret("gcpServiceAccountKey");
@@ -39,6 +41,20 @@ const allow8080 = new gcp.compute.Firewall("allow8080", {
     {
       protocol: "tcp",
       ports: ["8080"],
+    },
+  ],
+  sourceRanges: ["0.0.0.0/0"],
+  targetTags: ["devnet-instance", "mainnet-instance"],
+});
+
+// Create a firewall rule to allow traffic on port 8081.
+const allow8081 = new gcp.compute.Firewall("allow8081", {
+  project: project,
+  network: network.id,
+  allows: [
+    {
+      protocol: "tcp",
+      ports: ["8081"],
     },
   ],
   sourceRanges: ["0.0.0.0/0"],
@@ -195,11 +211,12 @@ const serviceAccountKey = new gcp.serviceaccount.Key("gum-redis-server-sa-key", 
 });
 
 // Create a Compute Engine instance with a custom startup script.
-const instanceDevnet = new gcp.compute.Instance(`${APP_NAME}-devnet-instance`, {
+const instanceSmartProfileDevnet = new gcp.compute.Instance(`${APP_NAME}-devnet-smartprofile-instance`, {
   name: `${APP_NAME}-devnet-instance`,
   project: project,
   zone: region + "-a",
   machineType: "n1-standard-1",
+  tags: ["devnet-instance"],
   networkInterfaces: [
     {
       network: network.id,
@@ -218,11 +235,13 @@ const instanceDevnet = new gcp.compute.Instance(`${APP_NAME}-devnet-instance`, {
     ],
   },
   allowStoppingForUpdate: true,
-  metadataStartupScript: pulumi.all([redisImage.imageName, postgresDevnetExternalIp, postgresDevnetUser.name, postgresDevnetUser.password]).apply(([image, host, user, pass]) => `
+  metadataStartupScript: pulumi.all([redisImage.imageName, postgresDevnetExternalIp, postgresDevnetUser.name, postgresDevnetUser.password, devnetRpcUrl]).apply(([image, host, user, pass, rpcUrl]) => `
     #!/bin/bash
     exec > >(tee /var/log/startup.log)
     exec 2>&1
     set -x
+
+    # Version 1
 
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -233,15 +252,18 @@ const instanceDevnet = new gcp.compute.Instance(`${APP_NAME}-devnet-instance`, {
     apt-get install -y docker-ce docker-ce-cli containerd.io
 
     docker pull ${image}
-    docker run -d --name app -p 8080:8080 --restart always --log-driver gcplogs --log-opt gcp-log-cmd=true -e CLUSTER="devnet" -e POSTGRES_HOST=${host} -e POSTGRES_USER=${user} -e POSTGRES_PASSWORD=${pass} -e POSTGRES_DB_NAME=${POSTGRES_DB_NAME} ${image}
+    docker run -d --name app -p 8080:8080 -p 8081:8081 --restart always --log-driver gcplogs --log-opt gcp-log-cmd=true \
+    -e CLUSTER="devnet" -e POSTGRES_HOST=${host} \
+    -e POSTGRES_USER=${user} -e POSTGRES_PASSWORD=${pass} -e POSTGRES_DB_NAME=${POSTGRES_DB_NAME} -e DEVNET_RPC_URL=${rpcUrl} ${image}
   `),
 });
 
-const instanceMainnet = new gcp.compute.Instance(`${APP_NAME}-mainnet-instance`, {
+const instanceSmartProfileMainnet = new gcp.compute.Instance(`${APP_NAME}-mainnet-smartprofile-instance`, {
   name: `${APP_NAME}-mainnet-instance`,
   project: project,
   zone: region + "-a",
   machineType: "n1-standard-1",
+  tags: ["mainnet-instance"],
   networkInterfaces: [
     {
       network: network.id,
@@ -260,11 +282,13 @@ const instanceMainnet = new gcp.compute.Instance(`${APP_NAME}-mainnet-instance`,
     ],
   },
   allowStoppingForUpdate: true,
-  metadataStartupScript: pulumi.all([redisImage.imageName, postgresMainnetExternalIp, postgresMainnetUser.name, postgresMainnetUser.password]).apply(([image, host, user, pass]) => `
+  metadataStartupScript: pulumi.all([redisImage.imageName, postgresMainnetExternalIp, postgresMainnetUser.name, postgresMainnetUser.password, mainnetRpcUrl]).apply(([image, host, user, pass, rpcUrl]) => `
     #!/bin/bash
     exec > >(tee /var/log/startup.log)
     exec 2>&1
     set -x
+
+    # Version 1
 
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -275,7 +299,9 @@ const instanceMainnet = new gcp.compute.Instance(`${APP_NAME}-mainnet-instance`,
     apt-get install -y docker-ce docker-ce-cli containerd.io
 
     docker pull ${image}
-    docker run -d --name app -p 8080:8080 --restart always --log-driver gcplogs --log-opt gcp-log-cmd=true -e CLUSTER="mainnet-beta" -e POSTGRES_HOST=${host} -e POSTGRES_USER=${user} -e POSTGRES_PASSWORD=${pass} -e POSTGRES_DB_NAME=${POSTGRES_DB_NAME} ${image}
+    docker run -d --name app -p 8080:8080 -p 8081:8081 --restart always --log-driver gcplogs --log-opt gcp-log-cmd=true \
+     -e CLUSTER="mainnet-beta" -e POSTGRES_HOST=${host} \
+     -e POSTGRES_USER=${user} -e POSTGRES_PASSWORD=${pass} -e POSTGRES_DB_NAME=${POSTGRES_DB_NAME} -e MAINNET_RPC_URL=${rpcUrl} ${image}
   `),
 });
 
@@ -305,6 +331,45 @@ const hasuraServiceDevnet = new gcp.cloudrun.Service(`${APP_NAME}-devnet-service
             {
               name: "HASURA_GRAPHQL_DATABASE_URL",
               value: pulumi.all([postgresDevnetUser.name, postgresDevnetUser.password, postgresDevnetExternalIp]).apply(([user, pass, ip]) => `postgres://${user}:${pass}@${ip}:${postgresDevnetPort}/${POSTGRES_DB_NAME}`),
+            },
+            {
+              name: "HASURA_GRAPHQL_ENABLE_CONSOLE",
+              value: "true",
+            },
+            {
+              name: "HASURA_GRAPHQL_ADMIN_SECRET",
+              value: hasuraAdminSecret,
+            },
+            {
+              name: "HASURA_GRAPHQL_UNAUTHORIZED_ROLE",
+              value: "public",
+            }
+          ],
+        }
+      ],
+    },
+  },
+  autogenerateRevisionName: true,
+  traffics: [
+    {
+      percent: 100,
+      latestRevision: true,
+    },
+  ],
+});
+
+const hasuraServiceSmartProfileDevnet = new gcp.cloudrun.Service(`${APP_NAME}-smartprofile-devnet-service`, {
+  name: `${APP_NAME}-smartprofile-devnet`,
+  location: region,
+  template: {
+    spec: {
+      containers: [
+        {
+          image: hasuraImage.imageName,
+          envs: [
+            {
+              name: "HASURA_GRAPHQL_DATABASE_URL",
+              value: pulumi.all([postgresDevnetUser.name, postgresDevnetUser.password, postgresDevnetExternalIp]).apply(([user, pass, ip]) => `postgres://${user}:${pass}@${ip}:${postgresDevnetPort}/gumcore`),
             },
             {
               name: "HASURA_GRAPHQL_ENABLE_CONSOLE",
@@ -371,11 +436,57 @@ const hasuraServiceMainnet = new gcp.cloudrun.Service(`${APP_NAME}-mainnet-servi
   ],
 });
 
+const hasuraServiceSmartProfileMainnet = new gcp.cloudrun.Service(`${APP_NAME}-smartprofile-mainnet-service`, {
+  name: `${APP_NAME}-smartprofile-mainnet`,
+  location: region,
+  template: {
+    spec: {
+      containers: [
+        {
+          image: hasuraImage.imageName,
+          envs: [
+            {
+              name: "HASURA_GRAPHQL_DATABASE_URL",
+              value: pulumi.all([postgresMainnetUser.name, postgresMainnetUser.password, postgresMainnetExternalIp]).apply(([user, pass, ip]) => `postgres://${user}:${pass}@${ip}:${postgresMainnetPort}/gumcore`),
+            },
+            {
+              name: "HASURA_GRAPHQL_ENABLE_CONSOLE",
+              value: "true",
+            },
+            {
+              name: "HASURA_GRAPHQL_ADMIN_SECRET",
+              value: hasuraAdminSecret,
+            },
+            {
+              name: "HASURA_GRAPHQL_UNAUTHORIZED_ROLE",
+              value: "public",
+            }
+          ],
+        }
+      ],
+    },
+  },
+  autogenerateRevisionName: true,
+  traffics: [
+    {
+      percent: 100,
+      latestRevision: true,
+    },
+  ],
+});
 
 // Set the IAM policy for the Cloud Run service to be publicly accessible.
 const hasuraIamMemberDevnet = new gcp.cloudrun.IamMember(`${APP_NAME}-devnet-hasura-iam-member`, {
   location: region,
   service: hasuraServiceDevnet.name,
+  role: "roles/run.invoker",
+  member: "allUsers",
+});
+
+// Set the IAM policy for the Cloud Run service to be publicly accessible.
+const hasuraIamMemberSmartProfileDevnet = new gcp.cloudrun.IamMember(`${APP_NAME}-smartprofile-devnet-hasura-iam-member`, {
+  location: region,
+  service: hasuraServiceSmartProfileDevnet.name,
   role: "roles/run.invoker",
   member: "allUsers",
 });
@@ -387,22 +498,36 @@ const hasuraIamMemberMainnet = new gcp.cloudrun.IamMember(`${APP_NAME}-mainnet-h
   member: "allUsers",
 });
 
+const hasuraIamMemberSmartProfileMainnet = new gcp.cloudrun.IamMember(`${APP_NAME}-smartprofile-mainnet-hasura-iam-member`, {
+  location: region,
+  service: hasuraServiceSmartProfileMainnet.name,
+  role: "roles/run.invoker",
+  member: "allUsers",
+});
 
-// Export the Hasura service URL.
+// Export the Hasura service URL for old gum program.
 export const hasuraDevnetServiceUrl = hasuraServiceDevnet.statuses[0].url;
 export const hasuraDevnetAPIUrl = pulumi.interpolate`${hasuraDevnetServiceUrl}/v1/graphql`;
 export const hasuraDevnetConsoleUrl = pulumi.interpolate`https://cloud.hasura.io/public/graphiql?endpoint=${hasuraDevnetAPIUrl}`;
 
-// Export the Hasura service URL.
 export const hasuraMainnetServiceUrl = hasuraServiceMainnet.statuses[0].url;
 export const hasuraMainnetAPIUrl = pulumi.interpolate`${hasuraMainnetServiceUrl}/v1/graphql`;
 export const hasuraMainnetConsoleUrl = pulumi.interpolate`https://cloud.hasura.io/public/graphiql?endpoint=${hasuraMainnetAPIUrl}`;
 
-// Export the instance's external IP.
-export const instanceDevnetExternalIp = instanceDevnet.networkInterfaces.apply(nis => nis[0].accessConfigs?.[0].natIp);
+// Export the Hasura service URL for smartprofile.
+export const hasuraSmartProfileDevnetServiceUrl = hasuraServiceSmartProfileDevnet.statuses[0].url;
+export const hasuraSmartProfileDevnetAPIUrl = pulumi.interpolate`${hasuraSmartProfileDevnetServiceUrl}/v1/graphql`;
+export const hasuraSmartProfileDevnetConsoleUrl = pulumi.interpolate`https://cloud.hasura.io/public/graphiql?endpoint=${hasuraSmartProfileDevnetAPIUrl}`;
+
+export const hasuraSmartProfileMainnetServiceUrl = hasuraServiceSmartProfileMainnet.statuses[0].url;
+export const hasuraSmartProfileMainnetAPIUrl = pulumi.interpolate`${hasuraSmartProfileMainnetServiceUrl}/v1/graphql`;
+export const hasuraSmartProfileMainnetConsoleUrl = pulumi.interpolate`https://cloud.hasura.io/public/graphiql?endpoint=${hasuraSmartProfileMainnetAPIUrl}`;
 
 // Export the instance's external IP.
-export const instanceMainnetExternalIp = instanceMainnet.networkInterfaces.apply(nis => nis[0].accessConfigs?.[0].natIp);
+export const instanceDevnetExternalIp = instanceSmartProfileDevnet.networkInterfaces.apply(nis => nis[0].accessConfigs?.[0].natIp);
+
+// Export the instance's external IP.
+export const instanceMainnetExternalIp = instanceSmartProfileMainnet.networkInterfaces.apply(nis => nis[0].accessConfigs?.[0].natIp);
 
 // Create a Public Role in Hasura and give it select permissions to all tables in the schema.
 async function applyPublicRole(hasuraUrl: any, adminSecret: string, schemaName: string) {
@@ -458,14 +583,11 @@ async function applyPublicRole(hasuraUrl: any, adminSecret: string, schemaName: 
       }
     }
   }
-
-
 }
 
 // Apply public role when both hasura services are ready
-pulumi.all([hasuraDevnetServiceUrl, hasuraMainnetServiceUrl, hasuraAdminSecret]).apply(async ([hasuraDevnetUrl, hasuraMainnetUrl, adminSecret]) => {
+pulumi.all([hasuraDevnetServiceUrl, hasuraSmartProfileDevnetServiceUrl, hasuraMainnetServiceUrl, hasuraAdminSecret]).apply(async ([hasuraDevnetUrl, smartProfileDevnetUrl, hasuraMainnetUrl, adminSecret]) => {
   await applyPublicRole(hasuraDevnetUrl, adminSecret, "public");
   await applyPublicRole(hasuraMainnetUrl, adminSecret, "public");
+  await applyPublicRole(smartProfileDevnetUrl, adminSecret, "public");
 });
-
-
