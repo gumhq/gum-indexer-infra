@@ -160,12 +160,21 @@ async function createQuery(decodedData: any, decodedAccountData: any) {
   } else if (decodedData.name === "createProfile") {
     const profileAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile").pubkey.toBase58();
     const authorityAddress = decodedAccountData.accounts.find((account: any) => account.name === "Authority").pubkey.toBase58();
+    const screenName = decodedAccountData.accounts.find((account: any) => account.name === "Screen Name").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
     const randomHash = decodedData.data.randomHash;
-    const screenName = decodedData.data.screenName;
-    console.log("screenName:", screenName);
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
 
-    const query = `INSERT INTO public.profile (address, authority, metadata_uri, random_hash, refreshed_at, created_at) VALUES ('${profileAddress}', '${authorityAddress}', '${metadataUri}', '{${randomHash.join(",")}}', '${isoTimestamp}', '${isoTimestamp}');`;
+    const query = `INSERT INTO public.profile (address, authority, metadata_uri, metadata, screen_name, random_hash, refreshed_at, created_at) VALUES ('${profileAddress}', '${authorityAddress}', '${metadataUri}', '${metadataJson}', '${screenName}', '{${randomHash.join(",")}}', '${isoTimestamp}', '${isoTimestamp}');`;
+    return query;
+  } else if (decodedData.name === "updateProfile") {
+    const profileAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile").pubkey.toBase58();
+    const metadataUri = decodedData.data.metadataUri;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
+
+    const query = `UPDATE public.profile SET metadata_uri = '${metadataUri}', metadata = '${metadataJson}' WHERE address = '${profileAddress}';`;
     return query;
   } else if (decodedData.name === "deleteProfile") {
     const profileAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile").pubkey.toBase58();

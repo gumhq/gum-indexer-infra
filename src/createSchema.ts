@@ -79,7 +79,7 @@ const defineModel = (
   };
 
   // Add metadata column to post and profile_metadata tables
-  if (account.name === 'Post' || account.name === 'ProfileMetadata') {
+  if (account.name === 'Post' || account.name === 'ProfileMetadata' || account.name === 'Profile') {
     modelDefinition['metadata'] = {
       type: DataTypes.JSONB,
     };
