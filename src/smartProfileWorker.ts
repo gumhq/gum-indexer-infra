@@ -235,14 +235,18 @@ async function createQuery(decodedData: any, decodedAccountData: any) {
     const holderAddress = decodedAccountData.accounts.find((account: any) => account.name === "Holder").pubkey.toBase58();
     const updateAuthorityAddress = decodedAccountData.accounts.find((account: any) => account.name === "Update Authority").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
 
-    const query = `INSERT INTO public.badge (address, issuer, schema, holder, update_authority, metadata_uri, refreshed_at, created_at) VALUES ('${badgeAddress}', '${issuerAddress}', '${schemaAddress}', '${holderAddress}', '${updateAuthorityAddress}', '${metadataUri}', '${isoTimestamp}', '${isoTimestamp}');`;
+    const query = `INSERT INTO public.badge (address, issuer, schema, holder, update_authority, metadata_uri, metadata, refreshed_at, created_at) VALUES ('${badgeAddress}', '${issuerAddress}', '${schemaAddress}', '${holderAddress}', '${updateAuthorityAddress}', '${metadataUri}', '${metadataJson}', '${isoTimestamp}', '${isoTimestamp}');`;
     return query;
   } else if (decodedData.name === "updateBadge") {
     const badgeAddress = decodedAccountData.accounts.find((account: any) => account.name === "Badge").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
 
-    const query = `UPDATE public.badge SET metadata_uri = '${metadataUri}' WHERE address = '${badgeAddress}';`;
+    const query = `UPDATE public.badge SET metadata_uri = '${metadataUri}', metadata = '${metadataJson}' WHERE address = '${badgeAddress}';`;
     return query;
   } else if (decodedData.name === "deleteBadge") {
     const badgeAddress = decodedAccountData.accounts.find((account: any) => account.name === "Badge").pubkey.toBase58();
@@ -253,15 +257,19 @@ async function createQuery(decodedData: any, decodedAccountData: any) {
     const schemaAddress = decodedAccountData.accounts.find((account: any) => account.name === "Schema").pubkey.toBase58();
     const authority = decodedAccountData.accounts.find((account: any) => account.name === "Authority").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
     const randomHash = decodedData.data.randomHash;
 
-    const query = `INSERT INTO public.schema (address, authority, metadata_uri, random_hash, refreshed_at, created_at) VALUES ('${schemaAddress}', '${authority}', '${metadataUri}', '{${randomHash.join(",")}}', '${isoTimestamp}', '${isoTimestamp}');`;
+    const query = `INSERT INTO public.schema (address, authority, metadata_uri, metadata, random_hash, refreshed_at, created_at) VALUES ('${schemaAddress}', '${authority}', '${metadataUri}', '${metadataJson}', '{${randomHash.join(",")}}', '${isoTimestamp}', '${isoTimestamp}');`;
     return query;
   } else if (decodedData.name === "updateSchema") {
     const schemaAddress = decodedAccountData.accounts.find((account: any) => account.name === "Schema").pubkey.toBase58();
     const metadataUri = decodedData.data.metadataUri;
+    const metadata = await fetchJsonData(metadataUri);
+    const metadataJson = JSON.stringify(metadata);
 
-    const query = `UPDATE public.schema SET metadata_uri = '${metadataUri}' WHERE address = '${schemaAddress}';`;
+    const query = `UPDATE public.schema SET metadata_uri = '${metadataUri}', metadata = '${metadataJson}' WHERE address = '${schemaAddress}';`;
     return query;
   } else if (decodedData.name === "deleteSchema") {
     const schemaAddress = decodedAccountData.accounts.find((account: any) => account.name === "Schema").pubkey.toBase58();

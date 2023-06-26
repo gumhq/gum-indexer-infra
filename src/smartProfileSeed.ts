@@ -41,9 +41,18 @@ const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey
 
       let metadata: any = null;
       if (instance.account && instance.account.metadataUri) {
-        metadata = await fetchJsonData(instance.account.metadataUri);
-        if (!metadata) {
-          console.error(`Failed to fetch metadata for "${instance.account.metadataUri}".`);
+        if (instance.account.metadataUri.startsWith("gateway://")) {
+          const gatewayUrl = process.env.GATEWAY_URL || "https://issue-gateway-credentials-lafkve5tyq-uc.a.run.app/getCredentialsById?credentialId=";
+          const metadataUri = instance.account.metadataUri;
+          const metadataUriParts = metadataUri.split("/");
+          const credentialId = metadataUriParts[metadataUriParts.length - 1];
+          const metadataUriWithGateway = gatewayUrl + credentialId;
+          metadata = await fetchJsonData(metadataUriWithGateway);
+        } else {
+          metadata = await fetchJsonData(instance.account.metadataUri);
+          if (!metadata) {
+            console.error(`Failed to fetch metadata for "${instance.account.metadataUri}".`);
+          }
         }
       }
 
