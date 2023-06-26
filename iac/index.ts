@@ -241,7 +241,7 @@ const instanceSmartProfileDevnet = new gcp.compute.Instance(`${APP_NAME}-devnet-
     exec 2>&1
     set -x
 
-    # Version 1
+    # Version 4
 
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -288,7 +288,7 @@ const instanceSmartProfileMainnet = new gcp.compute.Instance(`${APP_NAME}-mainne
     exec 2>&1
     set -x
 
-    # Version 1
+    # Version 2
 
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -586,8 +586,9 @@ async function applyPublicRole(hasuraUrl: any, adminSecret: string, schemaName: 
 }
 
 // Apply public role when both hasura services are ready
-pulumi.all([hasuraDevnetServiceUrl, hasuraSmartProfileDevnetServiceUrl, hasuraMainnetServiceUrl, hasuraAdminSecret]).apply(async ([hasuraDevnetUrl, smartProfileDevnetUrl, hasuraMainnetUrl, adminSecret]) => {
+pulumi.all([hasuraDevnetServiceUrl, hasuraSmartProfileDevnetServiceUrl, hasuraMainnetServiceUrl, hasuraSmartProfileMainnetServiceUrl, hasuraAdminSecret]).apply(async ([hasuraDevnetUrl, smartProfileDevnetUrl, hasuraMainnetUrl, smartProfileMainnetUrl, adminSecret]) => {
   await applyPublicRole(hasuraDevnetUrl, adminSecret, "public");
   await applyPublicRole(hasuraMainnetUrl, adminSecret, "public");
   await applyPublicRole(smartProfileDevnetUrl, adminSecret, "public");
+  await applyPublicRole(smartProfileMainnetUrl, adminSecret, "public");
 });
