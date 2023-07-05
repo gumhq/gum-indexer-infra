@@ -241,7 +241,7 @@ const instanceSmartProfileDevnet = new gcp.compute.Instance(`${APP_NAME}-devnet-
     exec 2>&1
     set -x
 
-    # Version 4
+    # Version 6
 
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -288,7 +288,7 @@ const instanceSmartProfileMainnet = new gcp.compute.Instance(`${APP_NAME}-mainne
     exec 2>&1
     set -x
 
-    # Version 2
+    # Version 4
 
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -573,6 +573,7 @@ async function applyPublicRole(hasuraUrl: any, adminSecret: string, schemaName: 
           permission: {
             columns: "*",
             filter: {},
+            allow_aggregations: true,
           },
         },
       });

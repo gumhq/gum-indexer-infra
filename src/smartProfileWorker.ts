@@ -3,6 +3,7 @@ import { Program,  AnchorProvider, Wallet, BorshCoder } from '@project-serum/anc
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { fetchJsonData } from "./seed";
 import connectToDatabase from "./database";
+import { getNameserviceByAddress, isEmoji } from "./smartProfileSeed";
 
 const REDIS_HOST = "0.0.0.0";
 const REDIS_PORT = 6379;
@@ -165,8 +166,10 @@ async function createQuery(decodedData: any, decodedAccountData: any) {
     const randomHash = decodedData.data.randomHash;
     const metadata = await fetchJsonData(metadataUri);
     const metadataJson = JSON.stringify(metadata);
+    const screenNameData = await getNameserviceByAddress(screenName);
+    const screenNameString = screenNameData.name;
 
-    const query = `INSERT INTO public.profile (address, authority, metadata_uri, metadata, screen_name, random_hash, refreshed_at, created_at) VALUES ('${profileAddress}', '${authorityAddress}', '${metadataUri}', '${metadataJson}', '${screenName}', '{${randomHash.join(",")}}', '${isoTimestamp}', '${isoTimestamp}');`;
+    const query = `INSERT INTO public.profile (address, authority, metadata_uri, metadata, screen_name, screen_name_string, random_hash, refreshed_at, created_at) VALUES ('${profileAddress}', '${authorityAddress}', '${metadataUri}', '${metadataJson}', '${screenName}', '${screenNameString}', '{${randomHash.join(",")}}', '${isoTimestamp}', '${isoTimestamp}');`;
     return query;
   } else if (decodedData.name === "updateProfile") {
     const profileAddress = decodedAccountData.accounts.find((account: any) => account.name === "Profile").pubkey.toBase58();
@@ -198,8 +201,9 @@ async function createQuery(decodedData: any, decodedAccountData: any) {
     const fromProfileAddress = decodedAccountData.accounts.find((account: any) => account.name === "From Profile").pubkey.toBase58();
     const toPostAddress = decodedAccountData.accounts.find((account: any) => account.name === "To Post").pubkey.toBase58();
     const reactionType = decodedData.data.reactionType;
+    const isReactionEmoji = isEmoji(reactionType);
 
-    const query = `INSERT INTO public.reaction (address, from_profile, to_post, reaction_type, refreshed_at, created_at) VALUES ('${reactionAddress}', '${fromProfileAddress}', '${toPostAddress}', '${reactionType}', '${isoTimestamp}', '${isoTimestamp}');`;
+    const query = `INSERT INTO public.reaction (address, from_profile, to_post, reaction_type, is_emoji, refreshed_at, created_at) VALUES ('${reactionAddress}', '${fromProfileAddress}', '${toPostAddress}', '${reactionType}', '${isReactionEmoji}', '${isoTimestamp}', '${isoTimestamp}');`;
     return query;
   } else if (decodedData.name === "deleteReaction") {
     const reactionAddress = decodedAccountData.accounts.find((account: any) => account.name === "Reaction").pubkey.toBase58();

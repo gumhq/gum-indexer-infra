@@ -85,6 +85,20 @@ const defineModel = (
     };
   }
 
+  if (account.name === 'Profile') {
+    modelDefinition['screen_name_string'] = {
+      type: DataTypes.STRING,
+      allowNull: true,
+    };
+  }
+
+  if (account.name === 'Reaction') {
+    modelDefinition['is_emoji'] = {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    };
+  }
+
   return sequelize.define(
     account.name,
     modelDefinition,

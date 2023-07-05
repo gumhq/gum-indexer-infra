@@ -1,11 +1,14 @@
 import { AnchorProvider, Program, Wallet } from "@project-serum/anchor";
-import { Connection, GetProgramAccountsFilter, Keypair, PublicKey } from "@solana/web3.js";
+import { Cluster, Connection, GetProgramAccountsFilter, Keypair, PublicKey } from "@solana/web3.js";
 import { defineIdlModels } from "./createSchema";
 const axios = require("axios");
+import emojiRegex from 'emoji-regex';
 import * as fs from 'fs';
 import * as path from 'path';
 import connectToDatabase from "./database";
 import dotenv from "dotenv";
+import { GATEWAY_SERVICE_URL, GRAPHQL_ENDPOINTS } from "@gumhq/sdk";
+import { GraphQLClient, gql } from "graphql-request";
 
 dotenv.config();
 
@@ -23,6 +26,32 @@ export const fetchJsonData = async (url: string): Promise<any> => {
   }
 };
 
+export const isEmoji = (text: string) => {
+  const regex = emojiRegex();
+  const match = regex.exec(text);
+  return match ? match[0] === text : false;
+};
+
+
+export const getNameserviceByAddress = async (address: string) => {
+  const query = gql`
+    query GetNameserviceByAddress($address: String!) {
+      name_record(where: {address: {_eq: $address}}) {
+        address
+        name
+      }
+    }`
+  const data = await gqlClient.request(query, { address }) as { name_record: [{ address: string, name: string }] };
+  return data.name_record[0];
+};
+
+const cluster = (process.env.CLUSTER as "devnet" | "mainnet-beta") || 'devnet';
+
+// GraphQL endpoint is chosen based on the network
+const graphqlEndpoint = GRAPHQL_ENDPOINTS[cluster];
+
+const gqlClient =  new GraphQLClient(graphqlEndpoint);
+
 const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey; account: any, slot_created_at: number, slot_updated_at: number }[] }, sequelize: any) => {
   for (const [modelName, instances] of Object.entries(data)) {
     const model = sequelize.model(modelName);
@@ -39,10 +68,23 @@ const storeDataInDatabase = async (data: { [key: string]: { publicKey: PublicKey
         }
       }
 
+      if (modelName === 'Reaction') {
+        const isReactionEmoji = isEmoji(instance.account.reactionType);
+        instance.account['is_emoji'] = isReactionEmoji;
+      }
+
+      if (modelName === 'Profile') {
+        console.log(`Fetching account for ${instance.account}`);
+        console.log(`Fetching screen name for ${instance.account.screenName}`);
+        const screenNameData = await getNameserviceByAddress(instance.account.screenName);
+        console.log(`Screen name data: ${JSON.stringify(screenNameData)}`);
+        instance.account['screen_name_string'] = screenNameData.name;
+      }
+
       let metadata: any = null;
       if (instance.account && instance.account.metadataUri) {
         if (instance.account.metadataUri.startsWith("gateway://")) {
-          const gatewayUrl = process.env.GATEWAY_URL || "https://issue-gateway-credentials-lafkve5tyq-uc.a.run.app/getCredentialsById?credentialId=";
+          const gatewayUrl = GATEWAY_SERVICE_URL + "/getCredentialsById?credentialId=";
           const metadataUri = instance.account.metadataUri;
           const metadataUriParts = metadataUri.split("/");
           const credentialId = metadataUriParts[metadataUriParts.length - 1];
@@ -144,7 +186,7 @@ const createSchemaAndUpsertArchivalData = async (programId: PublicKey, rpcUrl: s
 
 const MAINNET_RPC_URL = process.env.MAINNET_RPC_URL || "https://api.mainnet-beta.solana.com";
 const DEVNET_RPC_URL = process.env.DEVNET_RPC_URL || "https://api.devnet.solana.com";
-const rpcUrl = process.env.CLUSTER === "mainnet-beta" ? MAINNET_RPC_URL : DEVNET_RPC_URL;
+const rpcUrl = cluster === "mainnet-beta" ? MAINNET_RPC_URL : DEVNET_RPC_URL;
 
 // Read and parse the configuration file
 const configFilePath = path.resolve(__dirname, 'config.json');
