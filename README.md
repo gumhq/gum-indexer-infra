@@ -72,3 +72,13 @@ This will start the containers defined in the `docker-compose.yml` file, includi
 ## Deploy Infrastructure to GCP with Pulumi
 
 Follow the README in the `iac` directory to deploy the infrastructure to GCP.
+
+## Acknowledgements
+
+This project incorporates code from the Helium Program Library, specifically from the following modules:
+
+- [defineIdlModels.ts](https://github.com/helium/helium-program-library/blob/master/packages/account-postgres-sink-service/src/utils/defineIdlModels.ts): This module was used as a basis for our `createSchema.ts` file. The original authors are [@bryzettler](https://github.com/bryzettler) and [@ChewingGlass](https://github.com/ChewingGlass).
+
+- [upsertProgramAccounts.ts](https://github.com/helium/helium-program-library/blob/master/packages/account-postgres-sink-service/src/utils/upsertProgramAccounts.ts): This module was used as a basis for our `seed.ts` file. The original authors are [@bryzettler](https://github.com/bryzettler) and [@ChewingGlass](https://github.com/ChewingGlass).
+
+The above mentioned parts of our project use code from the Helium Program Library under the terms of its [Apache License 2.0](https://github.com/helium/helium-program-library/blob/master/LICENSE).

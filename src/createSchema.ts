@@ -1,3 +1,7 @@
+// This code is part of the Helium Program Library.
+// Original author: @@bryzettler @ChewingGlass (GitHub)
+// Source: https://github.com/helium/helium-program-library/blob/master/packages/account-postgres-sink-service/src/utils/defineIdlModels.ts
+
 import { Sequelize, DataTypes } from "sequelize";
 import * as anchor from "@project-serum/anchor";
 import { underscore } from "inflection";

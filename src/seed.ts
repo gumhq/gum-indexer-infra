@@ -1,3 +1,7 @@
+// This code is part of the Helium Program Library.
+// Original author: @@bryzettler @ChewingGlass (GitHub)
+// Source: https://github.com/helium/helium-program-library/blob/master/packages/account-postgres-sink-service/src/utils/upsertProgramAccounts.ts
+
 import { AnchorProvider, Program, Wallet } from "@project-serum/anchor";
 import { Connection, GetProgramAccountsFilter, Keypair, PublicKey } from "@solana/web3.js";
 import { defineIdlModels } from "./createSchema";
